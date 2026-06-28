@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Geetesh Singh — GIS Specialist & Product Lead, Esri India</title>
+<meta name="description" content="Portfolio of Geetesh Singh — geospatial engineer and Product Lead at Esri India. ArcGIS Enterprise, Utility Network, Living Atlas, and spatial systems." />
+
+<!-- Display: Space Grotesk · Body: Inter · Utility/data: Space Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* Cartographic palette: deep ocean-night base, coastline aqua, contour amber, depth violet */
+    --bg:        #060a12;
+    --bg-soft:   #0a1018;
+    --panel:     rgba(12, 19, 30, 0.55);
+    --panel-line:rgba(120, 160, 190, 0.14);
+    --ink:       #e9eef4;
+    --ink-soft:  #a6b4c5;
+    --ink-faint: #5e6b7c;
+    --aqua:      #36e0cf;
+    --amber:     #f4b14e;
+    --violet:    #9a7cf2;
+    --line:      rgba(140, 170, 200, 0.16);
+
+    --display: "Space Grotesk", system-ui, sans-serif;
+    --body: "Inter", system-ui, sans-serif;
+    --mono: "Space Mono", ui-monospace, monospace;
+
+    --maxw: 1140px;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+
+  body{
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(54,224,207,0.10), transparent 60%),
+      radial-gradient(1000px 800px at 8% 108%, rgba(154,124,242,0.10), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  /* ---- 3D canvas ---- */
+  #bg{
+    position:fixed; inset:0; width:100%; height:100%;
+    z-index:0; pointer-events:none;
+    display:block;
+  }
+  /* readability scrim: mutes the animation just enough for crisp text, without hiding it */
+  .scrim{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg,
+      rgba(6,10,18,0.52) 0%, rgba(6,10,18,0.40) 16%,
+      rgba(6,10,18,0.40) 84%, rgba(6,10,18,0.60) 100%);
+  }
+  .page{ position:relative; z-index:2; }
+
+  a{ color:inherit; text-decoration:none; }
+
+  /* ---- top scroll progress ---- */
+  #progress{
+    position:fixed; top:0; left:0; height:2px; width:0%;
+    background:linear-gradient(90deg, var(--aqua), var(--amber));
+    z-index:60; transition:width .12s linear;
+  }
+
+  /* ---- nav ---- */
+  .nav{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px clamp(18px, 5vw, 56px);
+    backdrop-filter:blur(10px);
+    background:linear-gradient(180deg, rgba(6,10,18,0.72), rgba(6,10,18,0));
+    border-bottom:1px solid transparent;
+  }
+  .brand{ font-family:var(--mono); font-size:14px; letter-spacing:0.04em; color:var(--ink); display:flex; align-items:center; gap:10px; }
+  .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--aqua); box-shadow:0 0 12px var(--aqua); }
+  .brand b{ font-weight:700; }
+  .brand span{ color:var(--ink-soft); }
+
+  .links{ display:flex; gap:6px; align-items:center; }
+  .links a{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase;
+    color:var(--ink-soft); padding:8px 12px; border-radius:8px; transition:color .25s, background .25s;
+  }
+  .links a:hover, .links a.active{ color:var(--ink); background:rgba(255,255,255,0.04); }
+  .links a.active{ color:var(--aqua); }
+
+  .menu-btn{
+    display:none; background:none; border:1px solid var(--panel-line); color:var(--ink);
+    border-radius:8px; padding:8px 12px; font-family:var(--mono); font-size:12px; cursor:pointer;
+  }
+
+  /* ---- coordinate HUD (cartographic status bar) ---- */
+  .hud{
+    position:fixed; left:clamp(14px,4vw,40px); bottom:clamp(14px,4vw,34px); z-index:40;
+    font-family:var(--mono); font-size:11px; letter-spacing:0.04em; color:var(--ink-soft);
+    border:1px solid var(--panel-line); border-radius:10px; padding:12px 14px;
+    background:var(--panel); backdrop-filter:blur(8px);
+    min-width:180px; line-height:1.5;
+    transition:opacity .4s;
+  }
+  .hud .row{ display:flex; justify-content:space-between; gap:18px; }
+  .hud .k{ color:var(--ink-faint); }
+  .hud .v{ color:var(--ink); }
+  .hud .layer{ color:var(--aqua); font-weight:700; text-transform:uppercase; }
+  .hud .bar{ height:2px; background:rgba(255,255,255,0.08); border-radius:2px; margin-top:9px; overflow:hidden; }
+  .hud .bar > i{ display:block; height:100%; width:6%; background:linear-gradient(90deg,var(--aqua),var(--amber)); }
+
+  /* ---- layout primitives ---- */
+  .section{
+    position:relative;
+    min-height:100vh;
+    display:flex; align-items:center;
+    padding:120px clamp(18px, 5vw, 56px);
+  }
+  .wrap{ width:100%; max-width:var(--maxw); margin:0 auto; }
+
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.16em; text-transform:uppercase;
+    color:var(--aqua); display:inline-flex; align-items:center; gap:10px; margin-bottom:22px;
+  }
+  .eyebrow::before{ content:""; width:0px; height:1px; background:var(--aqua); opacity:0.6; }
+
+  h1{ font-family:var(--display); font-weight:600; line-height:1.02; letter-spacing:-0.02em;
+      font-size:clamp(2.6rem, 8vw, 6.2rem); text-shadow:0 2px 44px rgba(6,10,18,0.92); }
+  h2{ font-family:var(--display); font-weight:600; line-height:1.05; letter-spacing:-0.015em;
+      font-size:clamp(1.9rem, 4.5vw, 3.1rem); text-shadow:0 2px 28px rgba(6,10,18,0.82); }
+  h3{ font-family:var(--display); font-weight:500; font-size:1.18rem; letter-spacing:-0.01em; }
+
+  p.lead{ font-size:clamp(1.05rem, 1.6vw, 1.32rem); color:var(--ink); max-width:62ch; text-shadow:0 1px 22px rgba(6,10,18,0.72); }
+  p.body{ color:var(--ink-soft); max-width:64ch; }
+
+  .layer-tag{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:0.1em; }
+
+  /* ---- reveal ---- */
+  .reveal{ opacity:0; transform:translateY(26px); transition:opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in{ opacity:1; transform:none; }
+  .d1{ transition-delay:.08s; } .d2{ transition-delay:.16s; } .d3{ transition-delay:.24s; } .d4{ transition-delay:.32s; }
+
+  /* ================= HERO ================= */
+  #hero .wrap{ max-width:980px; }
+  .role{ font-family:var(--display); font-weight:500; font-size:clamp(1.05rem,2.4vw,1.5rem); color:var(--ink); margin-top:18px; }
+  .role .sep{ color:var(--ink-faint); margin:0 10px; }
+  .role em{ font-style:normal; color:var(--amber); }
+  .hero-sub{ margin-top:26px; }
+  .scrollcue{ margin-top:54px; font-family:var(--mono); font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft);
+    display:inline-flex; align-items:center; gap:10px; }
+  .scrollcue .arrow{ animation:bob 1.8s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
+
+  .statline{ display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:40px; }
+  .stat{ font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); letter-spacing:0.03em; }
+  .stat b{ color:var(--ink); font-weight:700; font-size:1.5rem; display:block; line-height:1; margin-bottom:5px; font-family:var(--display); }
+
+  /* ================= ABOUT ================= */
+  .about-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:clamp(28px,5vw,72px); align-items:start; }
+  .about-grid .body{ font-size:1.06rem; }
+  .about-grid .body + .body{ margin-top:18px; }
+  .edu{ border-left:1px solid var(--line); padding-left:22px; }
+  .edu .item{ margin-bottom:24px; }
+  .edu .deg{ font-family:var(--display); font-weight:500; font-size:1.02rem; }
+  .edu .meta{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-top:5px; letter-spacing:0.02em; }
+  .edu .gpa{ color:var(--aqua); }
+
+  /* ================= EXPERIENCE ================= */
+  .xp{ display:flex; flex-direction:column; gap:14px; }
+  .job{
+    border:1px solid var(--panel-line); border-radius:16px; padding:clamp(20px,3vw,32px);
+    background:var(--panel); backdrop-filter:blur(8px);
+    transition:border-color .35s, transform .35s;
+  }
+  .job:hover{ border-color:rgba(54,224,207,0.35); transform:translateY(-2px); }
+  .job-top{ display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap; align-items:baseline; }
+  .job-id{ font-family:var(--mono); font-size:12px; color:var(--aqua); letter-spacing:0.08em; }
+  .job h3 span{ color:var(--ink-soft); font-weight:400; }
+  .job .when{ font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); text-align:right; letter-spacing:0.02em; white-space:nowrap; }
+  .job .where{ color:var(--ink-faint); }
+  .job ul{ list-style:none; margin-top:18px; display:grid; gap:10px; }
+  .job li{ position:relative; padding-left:22px; color:var(--ink-soft); font-size:0.97rem; }
+  .job li::before{ content:""; position:absolute; left:2px; top:0.62em; width:6px; height:6px; border-radius:50%;
+    background:var(--amber); box-shadow:0 0 8px rgba(244,177,78,0.5); }
+  .job li b{ color:var(--ink); font-weight:600; }
+
+  /* ================= AWARDS ================= */
+  .awards{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .award{
+    border:1px solid var(--panel-line); border-radius:16px; padding:26px; background:var(--panel);
+    backdrop-filter:blur(8px); min-height:210px; display:flex; flex-direction:column;
+    transition:transform .35s, border-color .35s;
+  }
+  .award:hover{ transform:translateY(-3px); border-color:rgba(244,177,78,0.35); }
+  .award .badge{ font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--amber); }
+  .award h3{ margin-top:14px; }
+  .award p{ color:var(--ink-soft); font-size:0.93rem; margin-top:10px; }
+  .award .yr{ margin-top:auto; font-family:var(--mono); font-size:12px; color:var(--ink-faint); padding-top:16px; }
+  .award.placeholder{ border-style:dashed; border-color:var(--panel-line); align-items:flex-start; justify-content:center; color:var(--ink-faint); }
+  .award.placeholder .badge{ color:var(--ink-faint); }
+  .award.placeholder .hint{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); margin-top:10px; }
+  .award .ext{ font-family:var(--mono); font-size:11px; color:var(--aqua); margin-left:8px; opacity:0.55; transition:opacity .3s, transform .3s; display:inline-block; }
+  .award:hover .ext{ opacity:1; transform:translateX(3px); }
+
+  /* ================= CERTS ================= */
+  .cert-cols{ display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(20px,4vw,48px); }
+  .cert-group h4{ font-family:var(--mono); font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:16px; }
+  .cert-group ul{ list-style:none; display:grid; gap:12px; }
+  .cert-group li{ padding-bottom:12px; border-bottom:1px solid var(--line); }
+  .cert-group .name{ font-family:var(--display); font-weight:500; font-size:0.98rem; }
+  .cert-group .code{ font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+  .cert-group a.cert-link{ display:block; color:inherit; text-decoration:none; }
+  .cert-group a.cert-link .name{ display:flex; align-items:baseline; gap:8px; }
+  .cert-group .cext{ font-family:var(--mono); font-size:11px; color:var(--aqua); opacity:0.45; transition:opacity .25s, transform .25s; }
+  .cert-group a.cert-link:hover .name{ color:var(--aqua); }
+  .cert-group a.cert-link:hover .cext{ opacity:1; transform:translateX(2px); }
+
+  /* ================= WORK / PROJECTS ================= */
+  .proj-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+  .proj{
+    border:1px solid var(--panel-line); border-radius:16px; padding:26px; background:var(--panel); backdrop-filter:blur(8px);
+    transition:transform .35s, border-color .35s;
+  }
+  .proj:hover{ transform:translateY(-3px); border-color:rgba(154,124,242,0.4); }
+  .proj .tag{ font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--violet); }
+  .proj h3{ margin-top:12px; }
+  .proj p{ color:var(--ink-soft); font-size:0.95rem; margin-top:10px; }
+  .proj .org{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); margin-top:14px; }
+
+  /* skills */
+  .skills{ margin-top:54px; }
+  .skill-row{ display:grid; grid-template-columns:170px 1fr; gap:18px; padding:18px 0; border-top:1px solid var(--line); align-items:start; }
+  .skill-row .label{ font-family:var(--mono); font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); padding-top:6px; }
+  .tags{ display:flex; flex-wrap:wrap; gap:8px; }
+  .tag-pill{ font-family:var(--mono); font-size:12.5px; color:var(--ink); border:1px solid var(--panel-line); border-radius:999px; padding:6px 14px; background:rgba(255,255,255,0.02); }
+
+  /* ================= GALLERY ================= */
+  .gal-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .tile{
+    position:relative; aspect-ratio:4/3; border-radius:14px; overflow:hidden;
+    border:1px solid var(--panel-line);
+    background:
+      linear-gradient(135deg, rgba(54,224,207,0.08), rgba(154,124,242,0.08)),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 26px),
+      var(--bg-soft);
+    display:flex; align-items:flex-end;
+    transition:border-color .35s, transform .35s;
+  }
+  .tile:hover{ border-color:rgba(54,224,207,0.35); transform:translateY(-2px); }
+  .tile img, .tile video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; background:var(--bg-soft); }
+  /* safety net: even a bare <img>/<video> dropped straight into the grid stays a uniform 4:3 card */
+  .gal-grid > img, .gal-grid > video{ aspect-ratio:4/3; width:100%; height:100%; object-fit:cover; display:block; border-radius:14px; border:1px solid var(--panel-line); background:var(--bg-soft); }
+  .tile .cap{ position:relative; z-index:2; padding:14px; width:100%;
+    background:linear-gradient(0deg, rgba(6,10,18,0.85), transparent);
+    font-family:var(--mono); font-size:12px; color:var(--ink); letter-spacing:0.02em; }
+  .tile .cap .sub{ color:var(--ink-soft); }
+  .tile .plus{ position:absolute; inset:0; z-index:1; display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:0.08em; }
+  .gal-note{ font-family:var(--mono); font-size:12px; color:var(--ink-faint); margin-top:18px; }
+
+  /* extra-curricular */
+  .interests{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:42px; }
+  .intcard{ display:flex; align-items:center; gap:10px; border:1px solid var(--panel-line); border-radius:999px; padding:9px 16px; background:rgba(255,255,255,0.02); transition:border-color .3s, transform .3s; }
+  .intcard:hover{ border-color:rgba(54,224,207,0.35); transform:translateY(-2px); }
+  .intcard .ico{ color:var(--aqua); font-family:var(--mono); font-size:14px; line-height:1; }
+  .intcard .t{ font-size:0.93rem; color:var(--ink); }
+  .places-head{ margin-bottom:16px; }
+
+  /* ================= CONTACT ================= */
+  #contact .wrap{ max-width:980px; }
+  .contact-h{ font-family:var(--display); font-weight:600; letter-spacing:-0.02em; font-size:clamp(2rem,6vw,4rem); line-height:1.04; }
+  .contact-h .accent{ color:var(--aqua); }
+  .contact-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-top:46px; }
+  .ccard{ border:1px solid var(--panel-line); border-radius:14px; padding:22px 24px; background:var(--panel); backdrop-filter:blur(8px);
+    transition:border-color .3s, transform .3s; }
+  .ccard:hover{ border-color:rgba(54,224,207,0.4); transform:translateY(-2px); }
+  .ccard .k{ font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-faint); }
+  .ccard .v{ font-family:var(--display); font-size:1.06rem; margin-top:8px; word-break:break-word; }
+  .ccard:hover .v{ color:var(--aqua); }
+
+  /* ================= FOOTER ================= */
+  footer{ padding:46px clamp(18px,5vw,56px); border-top:1px solid var(--line); }
+  .foot{ max-width:var(--maxw); margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:0.04em; }
+  .foot a:hover{ color:var(--aqua); }
+
+  /* ================= RESPONSIVE ================= */
+  @media (max-width: 860px){
+    .links{ display:none; }
+    .menu-btn{ display:inline-block; }
+    .nav.open .links{
+      display:flex; position:absolute; top:100%; left:0; right:0; flex-direction:column; gap:2px;
+      padding:14px clamp(18px,5vw,56px) 22px; background:rgba(7,11,19,0.96); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--panel-line);
+    }
+    .nav.open .links a{ padding:12px 4px; }
+    .about-grid{ grid-template-columns:1fr; }
+    .awards{ grid-template-columns:1fr; }
+    .cert-cols{ grid-template-columns:1fr; gap:30px; }
+    .proj-grid{ grid-template-columns:1fr; }
+    .gal-grid{ grid-template-columns:1fr 1fr; }
+    .contact-grid{ grid-template-columns:1fr; }
+    .skill-row{ grid-template-columns:1fr; gap:10px; }
+    .job .when{ text-align:left; }
+  }
+  @media (max-width: 520px){
+    .gal-grid{ grid-template-columns:1fr; }
+    .statline{ gap:14px 22px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    html{ scroll-behavior:auto; }
+    .reveal{ opacity:1; transform:none; transition:none; }
+    .scrollcue .arrow{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="scrim" aria-hidden="true"></div>
+<div id="progress"></div>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#hero" aria-label="Home">
+    <span class="dot"></span><b>geetesh.singh</b>
+  </a>
+  <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-label="Toggle menu">menu</button>
+  <nav class="links" id="links" aria-label="Primary">
+    <a href="#about" data-target="about">About</a>
+    <a href="#experience" data-target="experience">Experience</a>
+    <a href="#awards" data-target="awards">Awards</a>
+    <a href="#work" data-target="work">Work</a>
+    <a href="#extracurricular" data-target="extracurricular">Life</a>
+    <a href="#contact" data-target="contact">Contact</a>
+  </nav>
+</header>
+
+<aside class="hud" id="hud" aria-hidden="true">
+  <div class="row"><span class="k">LAT</span><span class="v" id="hudLat">28.57° N</span></div>
+  <div class="row"><span class="k">LON</span><span class="v" id="hudLon">77.31° E</span></div>
+  <div class="bar"><i id="hudBar"></i></div>
+</aside>
+<main class="page">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="section" id="hero"
+    data-layer="Home" data-lat="28.57° N" data-lon="77.31° E" data-zoom="02">
+    <div class="wrap">
+      <div class="eyebrow reveal">28.5742° N · 77.3126° E — Noida, India</div>
+      <h1 class="reveal d1">Geetesh<br>Singh</h1>
+      <p class="role reveal d2">GIS Specialist <span class="sep">/</span> <em>Product Lead, Esri India</em></p>
+      <p class="lead hero-sub reveal d3">I design and implement end‑to‑end geospatial solutions that transform spatial data into reliable systems organizations can depend on. Beyond architecting and scaling ArcGIS Enterprise, I work hands‑on across the ArcGIS Suite to deploy, test, and deliver production‑ready solutions that empower confident decision‑making.</p>
+      <div class="statline reveal d4">
+        <div class="stat"><b>5+</b> years across the ArcGIS stack</div>
+        <div class="stat"><b>5+</b> technical trainings delivered</div>
+        <div class="stat"><b>4</b> Esri certifications</div>
+        <div class="stat"><b>5</b> cloud certifications</div>
+      </div>
+      <div class="scrollcue reveal d4">Scroll down to explore my journey <span class="arrow">↓</span></div>
+    </div>
+  </section>
+
+  <!-- ===================== ABOUT ===================== -->
+  <section class="section" id="about"
+    data-layer="Profile" data-lat="28.57° N" data-lon="77.31° E" data-zoom="03">
+    <div class="wrap">
+      <div class="eyebrow reveal">Profile</div>
+      <h2 class="reveal d1" style="margin-bottom:34px;">Geospatial engineer, building the layer<br>between raw data and decisions.</h2>
+      <div class="about-grid">
+		<div class="reveal d2">
+		  <p class="body">I work across the full ArcGIS platform from Utility Network deployments on enterprise geodatabases to administering national-scale Living Atlas content. Most of what I do lives in the unglamorous middle: installation, configuration, uptime, publishing and the integrations that quietly make a deployment trustworthy.</p>  
+		  <p class="body">Today, I lead product for Esri India's Premium data offerings, owning the lifecycle end to end standing up environments, building client-facing proofs of concept, writing the documentation, and growing the team that keeps it all running. I like problems where cartography, automation, and a real user need all have to line up at once.</p>
+		</div>
+
+        <div class="edu reveal d3">
+          <div class="layer-tag" style="margin-bottom:20px;">EDUCATION</div>
+          <div class="item">
+            <div class="deg">B.Tech, Geo-Informatics Engineering</div>
+            <div class="meta">University of Petroleum &amp; Energy Studies · 2017–2021<br><span class="gpa">GPA 8.3 / 10.0</span></div>
+          </div>
+          <div class="item">
+            <div class="deg">Higher &amp; Secondary School</div>
+            <div class="meta">Red Rose Convent School · 2017 · 2015<br><span class="gpa">XII — 89.4% · X — 9.4 / 10.0 </span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== EXPERIENCE ===================== -->
+  <section class="section" id="experience"
+    data-layer="Experience" data-lat="28.57° N" data-lon="77.31° E" data-zoom="05">
+    <div class="wrap">
+      <div class="eyebrow reveal">Experience</div>
+      <h2 class="reveal d1" style="margin-bottom:34px;">A track record across the stack.</h2>
+      <div class="xp">
+
+        <article class="job reveal d2">
+          <div class="job-top">
+            <div>
+              <div class="job-id">01 </div>
+              <h3>Product Lead <span>· Esri India</span></h3>
+              <div class="where">Noida, India</div>
+            </div>
+            <div class="when">Oct 2025 — Present</div>
+          </div>
+          <ul>
+            <li><b>Owned the ArcGIS Enterprise lifecycle</b> — installation, configuration, deployment, troubleshooting, and testing for Esri India's premium data products (raster &amp; vector basemaps, Business Analyst, StreetMap Premium).</li>
+            <li><b>Administered the Indo ArcGIS Living Atlas</b> environment, holding 99.9% uptime.</li>
+            <li><b>Built client-facing proofs of concept</b> showcasing ArcGIS products to drive deals.</li>
+            <li><b>Led technical training</b> for a 15-member team with regular evaluations to keep continuous learning on track.</li>
+            <li><b>Partnered with cross-functional teams</b> to close client deals.</li>
+            <li><b>Took on out-of-scope engineering</b> — API integrations with ArcGIS, custom dashboards, and web applications.</li>
+            <li><b>Ran enablement &amp; content</b> — workshops, technical documentation, user manuals, blogs and newsletters, plus website updates with the marketing team.</li>
+            <li><b>Drove team operations</b> — monthly CTO syncs, minutes of meeting, weekly internal reviews, and progress tracking.</li>
+          </ul>
+        </article>
+
+        <article class="job reveal d2">
+          <div class="job-top">
+            <div>
+              <div class="job-id">02</div>
+              <h3>Application Development Analyst <span>· Accenture</span></h3>
+              <div class="where">Gurgaon, India</div>
+            </div>
+            <div class="when">Sep 2023 — Oct 2025</div>
+          </div>
+          <ul>
+            <li><b>Deployed ArcGIS Utility Network</b> on an Oracle enterprise geodatabase for electric &amp; telecom utility clients, and administered the ArcGIS Enterprise environment.</li>
+            <li><b>Designed, published, and managed</b> GIS services across multiple environments; wrote Python for geoprocessing automation and Arcade attribute rules for data integrity.</li>
+            <li><b>Deployed and monitored Experience Builder</b> on Linux (Apache Tomcat) and built custom tool UIs in HTML &amp; CSS.</li>
+            <li><b>Represented the GIS team onsite in Japan</b> (two weeks) — requirement gathering and technical planning for a legacy-to-Utility-Network migration, with knowledge-transfer sessions for the Accenture Japan team.</li>
+            <li><b>Authored Requirement Traceability Matrices</b> for 150+ requirements and ran proofs of concept across ArcGIS Pro, Enterprise, and Experience Builder.</li>
+          </ul>
+        </article>
+
+        <article class="job reveal d2">
+          <div class="job-top">
+            <div>
+              <div class="job-id">03</div>
+              <h3>GIS Analyst → SME GIS <span>· Cybertech Systems &amp; Software Limited</span></h3>
+              <div class="where">Pune, India</div>
+            </div>
+            <div class="when">Jan 2021 — Aug 2023</div>
+          </div>
+          <ul>
+            <li><b>Primary point of contact for clients</b>, delivering technical support on Esri products across 1,500+ cases while embedded at Esri.</li>
+            <li><b>Identified, logged, and validated</b> product defects and enhancement requests.</li>
+            <li><b>Subject-matter expert</b> for ArcGIS Pro, Enterprise, and Online; ran internal training on ArcGIS Pro and Python for GIS.</li>
+            <li><b>Conducted technical evaluations</b> for new trainees to support onboarding and development.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== AWARDS ===================== -->
+  <section class="section" id="awards"
+    data-layer="Recognition" data-lat="28.57° N" data-lon="77.31° E" data-zoom="04">
+    <div class="wrap">
+      <div class="eyebrow reveal">Recognition</div>
+      <h2 class="reveal d1" style="margin-bottom:34px;">Awards &amp; recognition.</h2>
+      <!-- Each award is a clickable card. Replace href="#" with a link to the certificate PDF or page — it opens in a new tab. If an award has no link, you can change the <a ...> to a <div class="award ..."> and delete the <span class="ext"> line. -->
+      <div class="awards">
+        <a class="award reveal d1" href="https://1drv.ms/i/c/210beea066199d03/IQCmneHxNdhZTIJ9eQcaernPAS0R5kSSA-1a245c13A527o?e=lKmM8A" target="_blank" rel="noopener">
+          <div class="badge">Awarded</div>
+          <h3>Promising Debutant</h3>
+          <p>For quickly developing a strong understanding of Esri data products — contributing across setup, testing, documentation, and customer queries with a careful, solution-oriented approach.</p>
+          <div class="yr">Esri India · May 2026 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d2" href="https://1drv.ms/i/c/210beea066199d03/IQDZqG7KHpzeR43jsglEfGQAAWK9U3sLSAKR-Zx-jvLuGV8?e=R8q516" target="_blank" rel="noopener">
+          <div class="badge">Awarded</div>
+          <h3>Value Champion</h3>
+          <p>For adapting quickly to the product-engineering environment and supporting global team queries, with significant contributions to local product deployment, testing, and documentation.</p>
+          <div class="yr">Esri India · Jan 2026 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d3" href="https://1drv.ms/b/c/210beea066199d03/IQCFaBffsNV7S6o3kRUBap4RAS2P7Pd5T9wJWmLDmVKRMrs?e=P78abc" target="_blank" rel="noopener">
+          <div class="badge">Awarded</div>
+          <h3>Pinnacle Award · Rising Star</h3>
+          <p>Pinnacle Award FY24 — Rising Star. Recognized for exceptional performance and impact as a new joiner at ATCI North America.</p>
+          <div class="yr">Accenture · 2025 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d1" href="https://1drv.ms/b/c/210beea066199d03/IQDsmKsAf86nRJv-PSV2yb6-AXPOweGfmdkOlGIHtuGXIXA?e=v5Zapv" target="_blank" rel="noopener">
+          <div class="badge">Awarded</div>
+          <h3>Pinnacle Award · FY24 Q4</h3>
+          <p>FY24-Q4 ATCI North America Pinnacle Award — recognized for outstanding contributions in driving innovation and delivering value across strategic initiatives.</p>
+          <div class="yr">Accenture · Aug 2024 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d2" target="_blank" rel="noopener">
+          <div class="badge">Selected · Onsite</div>
+          <h3>Client Engagement, Tokyo</h3>
+          <p>Chosen to represent the GIS team in a two-week onsite in Japan — scoping a legacy-to-Utility-Network migration and leading knowledge-transfer for the Accenture Japan team.</p>
+          <div class="yr">Accenture · 2024 </div>
+        </a>
+        <a class="award reveal d1" href="https://1drv.ms/i/c/210beea066199d03/IQBEuoTS31PBQKC3uQTUapKaAZE7GCAFBJKxuUUC_b4TTn0?e=SD7onn" target="_blank" rel="noopener">
+          <div class="badge">Recognized</div>
+          <h3>CyberTech Geospatial Leader</h3>
+          <p>Recognized as a CyberTech Geospatial Leader (CGL#1114) for demonstrated GIS expertise and leadership in geospatial solutions.</p>
+          <div class="yr">Cybertech · 2023 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d2" href="https://1drv.ms/i/c/210beea066199d03/IQCognBK_zTLSrv6-fUjIyaEAQXngura8vJGh1Rw9edSfq8?e=LNjGr4" target="_blank" rel="noopener">
+          <div class="badge">Certified</div>
+          <h3>Evaluator Certification</h3>
+          <p>Completed certification to conduct technical evaluations for new hiring, while mentoring and grooming candidates in the use of ArcGIS products.</p>
+          <div class="yr">Cybertech · 2023 <span class="ext">Certificate ↗</span></div>
+        </a>
+        <a class="award reveal d3" href="https://link.springer.com/chapter/10.1007/978-981-16-8270-4_19" target="_blank" rel="noopener">
+          <div class="badge">Published</div>
+          <h3>Glacier Melting: Drastic Future</h3>
+          <p>Co-authored peer research on environmental risk and behaviour-based safety, with Amit Awasthi and Rishi Dewan.</p>
+          <div class="yr">Publication · June 2022 <span class="ext">Read ↗</span></div>
+        </a>
+        <a class="award reveal d1" href="https://1drv.ms/i/c/210beea066199d03/IQCmw45IAM6WTLp1M6YbbjepAb4i2I3E8_EFosVazyMyo7o?e=yAIWQU" target="_blank" rel="noopener">
+          <div class="badge">Awarded</div>
+          <h3>Best Trainee Award</h3>
+          <p>Awarded 'Best Trainee' for Q2 2021 during training at Cybertech.</p>
+          <div class="yr">Cybertech · 2021 <span class="ext">Certificate ↗</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WORK / PROJECTS + SKILLS ===================== -->
+  <section class="section" id="work"
+    data-layer="Projects" data-lat="28.57° N" data-lon="77.31° E" data-zoom="06">
+    <div class="wrap">
+      <div class="eyebrow reveal">Projects &amp; Internships</div>
+      <h2 class="reveal d1" style="margin-bottom:34px;">Selected work.</h2>
+      <div class="proj-grid">
+
+        <article class="proj reveal d2">
+          <div class="tag">Pipeline · UPDM</div>
+          <h3>Linear Referencing for Gas Pipeline Management</h3>
+          <p>Implemented linear referencing and dynamic segmentation to analyse pipeline attributes — asset group, type, diameter — and built Survey123 forms plus a dashboard for real-time gas-leak capture.</p>
+          <div class="org">Infosys · 2020</div>
+        </article>
+		        <article class="proj reveal d2">
+          <div class="tag">Navigation · APIs</div>
+          <h3>HERE Map Creator Community Program</h3>
+          <p>Updated and maintained geospatial data on HERE Map Creator via APIs, keeping navigation information accurate for public use.</p>
+          <div class="org">HERE Technologies · 2020</div>
+        </article>        
+        <article class="proj reveal d2">
+          <div class="tag">Dashboard · Real-time</div>
+          <h3>COVID-19 Situation Monitor</h3>
+          <p>Built an interactive dashboard surfacing live case trends, recoveries, and regional statistics to support faster, clearer decision-making.</p>
+          <div class="org">Academic Project · 2020</div>
+        </article>
+        <article class="proj reveal d2">
+          <div class="tag">Site Suitability · Telecom</div>
+          <h3>Optimal Mobile-Tower Siting, Udaipur</h3>
+          <p>Mapped signal strength and dead zones using buffer, viewshed, and near-distance analysis, with Python scripting to automate the spatial workflow.</p>
+          <div class="org">Academic Project · 2019</div>
+        </article>
+        <article class="proj reveal d2">
+          <div class="tag">Geoscience · Reservoir</div>
+          <h3>Petroleum Sedimentology &amp; Reservoir Description</h3>
+          <p>Reviewed source-rock characteristics, maturation, migration, and traps, analysing geological &amp; geophysical data to flag high-probability deposition zones.</p>
+          <div class="org">ONGC · 2019</div>
+        </article>
+      </div>
+
+      <div class="skills reveal d2">
+        <div class="eyebrow" style="color:var(--violet);">Capabilities</div>
+        <div class="skill-row">
+          <div class="label">Languages</div>
+          <div class="tags">
+            <span class="tag-pill">Python</span><span class="tag-pill">ArcPy</span><span class="tag-pill">ArcGIS API for Python</span>
+            <span class="tag-pill">Arcade</span><span class="tag-pill">HTML</span><span class="tag-pill">CSS</span><span class="tag-pill">SQL</span>
+          </div>
+        </div>
+        <div class="skill-row">
+          <div class="label">Platform</div>
+          <div class="tags">
+            <span class="tag-pill">ArcGIS Pro</span><span class="tag-pill">ArcGIS Enterprise</span><span class="tag-pill">ArcGIS Online</span>
+            <span class="tag-pill">Experience Builder</span><span class="tag-pill">Utility Network</span><span class="tag-pill">Survey123</span>
+            <span class="tag-pill">Dashboards</span><span class="tag-pill">Field Maps</span>
+          </div>
+        </div>
+        <div class="skill-row">
+          <div class="label">Operating System</div>
+          <div class="tags">
+            <span class="tag-pill">Windows</span><span class="tag-pill">Linux</span><span class="tag-pill">Android</span><span class="tag-pill">iOS</span>
+          </div>
+        </div>
+        <div class="skill-row">
+          <div class="label">Cloud</div>
+          <div class="tags">
+            <span class="tag-pill">Microsoft Azure</span><span class="tag-pill">Google Cloud</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:64px;" class="reveal d2">
+        <div class="eyebrow">Certifications</div>
+        <!-- Each certification is a link. Replace href="#" with the credential/PDF URL (e.g. a OneDrive or Credly link) — it opens in a new tab. -->
+        <div class="cert-cols">
+          <div class="cert-group">
+            <h4>Esri</h4>
+            <ul>
+              <li><a class="cert-link" href="https://www.credly.com/badges/e999fcc9-1b29-4e81-8c5a-72d674ebb86d/public_url" target="_blank" rel="noopener"><div class="name">ArcGIS Pro Associate <span class="cext">↗</span></div><div class="code">2101</div></a></li>
+              <li><a class="cert-link" href="https://www.credly.com/badges/ebc3bc4c-ec98-4fbf-b923-432ed8ae943b/public_url" target="_blank" rel="noopener"><div class="name">ArcGIS Utility Network Associate <span class="cext">↗</span></div><div class="code">2024</div></a></li>
+              <li><a class="cert-link" href="https://www.credly.com/badges/6fb17a7a-467b-4dac-82c2-d0d8a93f33c0" target="_blank" rel="noopener"><div class="name">ArcGIS Online Administration Specialty <span class="cext">↗</span></div><div class="code">19-001</div></a></li>
+              <li><a class="cert-link" href="https://www.credly.com/badges/15ff37be-c360-4408-b34e-2ff83acfac64" target="_blank" rel="noopener"><div class="name">ArcGIS API for Python Associate <span class="cext">↗</span></div><div class="code">2024</div></a></li>
+            </ul>
+          </div>
+          <div class="cert-group">
+            <h4>Microsoft</h4>
+            <ul>
+              <li><a class="cert-link" href="https://learn.microsoft.com/en-us/users/geeteshsingh-1408/credentials/7f5afd24eb675e6b" target="_blank" rel="noopener"><div class="name">Azure Fundamentals <span class="cext">↗</span></div><div class="code">AZ-900</div></a></li>
+              <li><a class="cert-link" href="https://learn.microsoft.com/en-us/users/geeteshsingh-1408/credentials/413cbcd697419a7" target="_blank" rel="noopener"><div class="name">Azure AI Fundamentals <span class="cext">↗</span></div><div class="code">AI-900</div></a></li>
+              <li><a class="cert-link" href="https://learn.microsoft.com/en-us/users/geeteshsingh-1408/credentials/57e9b71b7a010c08" target="_blank" rel="noopener"><div class="name">Azure Data Fundamentals <span class="cext">↗</span></div><div class="code">DP-900</div></a></li>
+              <li><a class="cert-link" href="https://learn.microsoft.com/en-us/users/geeteshsingh-1408/credentials/c3c90e909dd8d16a" target="_blank" rel="noopener"><div class="name">Power Platform Fundamentals <span class="cext">↗</span></div><div class="code">PL-900</div></a></li>
+            </ul>
+          </div>
+          <div class="cert-group">
+            <h4>Google</h4>
+            <ul>
+              <li><a class="cert-link" href="https://www.credential.net/6caa09ef-b2c0-48d7-9f51-48025cbf3ae6##acc.JXZzO08s" target="_blank" rel="noopener"><div class="name">Cloud Digital Leader <span class="cext">↗</span></div><div class="code">Google Cloud</div></a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== EXTRA CURRICULAR ===================== -->
+  <section class="section" id="extracurricular"
+    data-layer="Off the clock" data-lat="28.57° N" data-lon="77.31° E" data-zoom="05">
+    <div class="wrap">
+      <div class="eyebrow reveal">Beyond the map</div>
+      <h2 class="reveal d1" style="margin-bottom:16px;">Off the clock.</h2>
+      <p class="body reveal d1" style="margin-bottom:32px;">When I'm not deploying GIS, I'm usually outdoors, on a long walk, or planning the next trip — a map person who likes visiting the places on the map.</p>
+
+      <div class="interests reveal d2">
+        <div class="intcard"><span class="ico">◎</span><span class="t">Travelling to new places</span></div>
+        <div class="intcard"><span class="ico">❧</span><span class="t">Time in nature</span></div>
+        <div class="intcard"><span class="ico">⌖</span><span class="t">Photography</span></div>
+        <div class="intcard"><span class="ico">♪</span><span class="t">Long walks, headphones on</span></div>
+        <div class="intcard"><span class="ico">≋</span><span class="t">Swimming</span></div>
+        <div class="intcard"><span class="ico">▷</span><span class="t">Watching Netflix</span></div>
+      </div>
+
+      <div class="places-head reveal d2"><div class="layer-tag">PLACES I'VE BEEN</div></div>
+      <div class="gal-grid reveal d2">
+        <!-- To add a photo/clip for a place, replace its <div class="plus"> block with:  <img src="japan.jpg" alt="Japan">  or  <video src="clip.mp4" controls muted></video> -->
+        <!-- To fill a pin: replace its <div class="plus">...</div> with an <img>/<video> (keep the <figure class="tile"> wrapper and the <figcaption>). Adjust the "static/" path to wherever your files live. -->
+        <figure class="tile"><img src="static/japan.jpeg" alt="Japan" loading="lazy"><figcaption class="cap">Japan<br><span class="sub">35.65° N · 139.74° E</span></figcaption></figure>
+        <figure class="tile"><video src="static/Thailand.mp4" autoplay muted loop playsinline></video><figcaption class="cap">Thailand<br><span class="sub">07.60° N · 98.36° E</span></figcaption></figure>
+        <figure class="tile"><img src="static/Agra.jpeg" alt="Agra" loading="lazy"><figcaption class="cap">Agra<br><span class="sub">27.17° N · 78.04° E</span></figcaption></figure>
+        <figure class="tile"><video src="static/Kashmir.mp4" autoplay muted loop playsinline></video><figcaption class="cap">Kashmir<br><span class="sub">34.01° N · 74.31° E</span></figcaption></figure> 
+		<figure class="tile"><img src="static/Jaipur.jpeg" alt="Jaipur" loading="lazy"><figcaption class="cap">Jaipur<br><span class="sub">26.92° N · 75.82° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Mussoorie.jpeg" alt="Mussoorie" loading="lazy"><figcaption class="cap">Mussoorie<br><span class="sub">30.47° N · 78.04° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Devprayag.jpeg" alt="Devprayag" loading="lazy"><figcaption class="cap">Devprayag<br><span class="sub">30.14° N · 78.59° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Goa.jpeg" alt="Goa" loading="lazy"><figcaption class="cap">Goa<br><span class="sub">14.99° N · 74.03° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Jammu.jpeg" alt="Jammmu" loading="lazy"><figcaption class="cap">Jammu<br><span class="sub">33.03° N · 74.94° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Dhanaulti.jpeg" alt="Dhanaulti" loading="lazy"><figcaption class="cap">Dhanaulti<br><span class="sub">30.40° N · 78.23° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/Pune.jpeg" alt="Pune" loading="lazy"><figcaption class="cap">Pune<br><span class="sub">18.36° N · 73.75° E</span></figcaption></figure>
+		<figure class="tile"><img src="static/delhi.jpeg" alt="Delhi" loading="lazy"><figcaption class="cap">Delhi<br><span class="sub">28.55° N · 77.25° E</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+  <!-- ===================== CONTACT ===================== -->
+  <section class="section" id="contact"
+    data-layer="Connect" data-lat="28.57° N" data-lon="77.31° E" data-zoom="03">
+    <div class="wrap">
+      <div class="eyebrow reveal">Connect</div>
+      <h2 class="contact-h reveal d1">Let's map<br>something <span class="accent">together.</span></h2>
+      <div class="contact-grid">
+        <a class="ccard reveal d2" href="mailto:geetesh486@gmail.com">
+          <div class="k">Email</div><div class="v">geetesh486@gmail.com</div>
+        </a>
+        <a class="ccard reveal d2" href="tel:+916396699103">
+          <div class="k">Phone</div><div class="v">+91 63966 99103</div>
+        </a>
+        <a class="ccard reveal d3" href="https://www.linkedin.com/in/geetesh-singh-07" target="_blank" rel="noopener">
+          <div class="k">LinkedIn</div><div class="v">in/geetesh-singh-07</div>
+        </a>
+        <div class="ccard reveal d3">
+          <div class="k">Based in</div><div class="v">Noida, India</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <span>© <span id="yr"></span> Geetesh Singh — geetesh.singh</span>
+    <span>Built with maps in mind · ArcGIS · GIS · Spatial systems</span>
+  </div>
+</footer>
+
+<!-- Three.js (loads from CDN; site still renders fully if it's unavailable) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- year ---------- */
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  /* ---------- mobile menu ---------- */
+  var nav = document.getElementById('nav');
+  var menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click', function(){
+    var open = nav.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.querySelectorAll('#links a').forEach(function(a){
+    a.addEventListener('click', function(){ nav.classList.remove('open'); menuBtn.setAttribute('aria-expanded','false'); });
+  });
+
+  /* ---------- reveal on scroll ---------- */
+  var revObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); revObs.unobserve(e.target); } });
+  }, { threshold:0.12, rootMargin:'0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach(function(el){ revObs.observe(el); });
+
+  /* ---------- HUD + active nav (scroll spy) ---------- */
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.section'));
+  var hud = { lat:document.getElementById('hudLat'),
+              lon:document.getElementById('hudLon'), bar:document.getElementById('hudBar') };
+  var navLinks = {};
+  document.querySelectorAll('#links a').forEach(function(a){ navLinks[a.getAttribute('data-target')] = a; });
+
+  var spyObs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        var s = e.target;
+        hud.lat.textContent = s.getAttribute('data-lat');
+        hud.lon.textContent = s.getAttribute('data-lon');
+        for(var key in navLinks){ navLinks[key].classList.remove('active'); }
+        if(navLinks[s.id]) navLinks[s.id].classList.add('active');
+      }
+    });
+  }, { rootMargin:'-45% 0px -45% 0px', threshold:0 });
+  sections.forEach(function(s){ spyObs.observe(s); });
+
+  /* ---------- progress bar + scroll progress value ---------- */
+  var progressEl = document.getElementById('progress');
+  var targetP = 0;
+  function computeProgress(){
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    targetP = h > 0 ? Math.min(1, Math.max(0, window.scrollY / h)) : 0;
+    progressEl.style.width = (targetP*100).toFixed(2) + '%';
+    if(hud.bar) hud.bar.style.width = Math.max(6, targetP*100).toFixed(1) + '%';
+  }
+  window.addEventListener('scroll', computeProgress, { passive:true });
+  window.addEventListener('resize', computeProgress);
+  computeProgress();
+
+  /* ===================== 3D LIVING MAP ===================== */
+  if(!window.THREE){ return; } // graceful: content stays fully visible
+
+  try {
+    var THREE = window.THREE;
+    var isMobile = window.innerWidth < 760;
+    var canvas = document.getElementById('bg');
+    var renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0,0,52);
+
+    var group = new THREE.Group();
+    scene.add(group);
+
+    var N = isMobile ? 2200 : 4800;
+    var R = 18;
+
+    /* ----- morph-state generators (all geospatial forms) ----- */
+    function makeGlobe(){
+      var a = new Float32Array(N*3);
+      var off = 2/N, inc = Math.PI*(3 - Math.sqrt(5));
+      for(var i=0;i<N;i++){
+        var y = i*off - 1 + off/2;
+        var r = Math.sqrt(Math.max(0, 1 - y*y));
+        var phi = i*inc;
+        a[i*3]   = Math.cos(phi)*r*R;
+        a[i*3+1] = y*R;
+        a[i*3+2] = Math.sin(phi)*r*R;
+      }
+      return a;
+    }
+    function makeGrid(){
+      var a = new Float32Array(N*3);
+      var cols = Math.ceil(Math.sqrt(N));
+      var span = R*2.4;
+      for(var i=0;i<N;i++){
+        var gx = i % cols, gz = Math.floor(i/cols);
+        a[i*3]   = (gx/(cols-1) - 0.5)*span;
+        a[i*3+1] = 0;
+        a[i*3+2] = (gz/(cols-1) - 0.5)*span;
+      }
+      return a;
+    }
+    function makeTerrain(){
+      var a = makeGrid();
+      for(var i=0;i<N;i++){
+        var x = a[i*3], z = a[i*3+2];
+        a[i*3+1] = Math.sin(x*0.18)*Math.cos(z*0.16)*4
+                 + Math.sin((x+z)*0.09)*3
+                 + Math.cos(x*0.05 + z*0.07)*2;
+      }
+      return a;
+    }
+    function makeRings(){ // satellite orbits
+      var a = new Float32Array(N*3);
+      var K = 6;
+      for(var i=0;i<N;i++){
+        var ring = i % K;
+        var t = (i/N)*Math.PI*2*4 + ring;
+        var rad = R*0.92 + ring*1.25;
+        var tilt = (ring/K)*Math.PI;
+        var x = Math.cos(t)*rad, z = Math.sin(t)*rad;
+        var sy = Math.sin(tilt), cy = Math.cos(tilt);
+        a[i*3]   = x;
+        a[i*3+1] = -z*sy;
+        a[i*3+2] = z*cy;
+      }
+      return a;
+    }
+    function makeSpiral(){ // data scatter / galaxy
+      var a = new Float32Array(N*3);
+      var arms = 4;
+      for(var i=0;i<N;i++){
+        var t = i/N;
+        var rad = t*R*1.6;
+        var arm = (i % arms)/arms*Math.PI*2;
+        var ang = rad*0.35 + arm;
+        var j = (Math.random()-0.5)*2.4;
+        a[i*3]   = Math.cos(ang)*rad + j;
+        a[i*3+1] = (Math.random()-0.5)*4*(1-t) + j*0.3;
+        a[i*3+2] = Math.sin(ang)*rad + j;
+      }
+      return a;
+    }
+
+    var states = [ makeGlobe(), makeGrid(), makeTerrain(), makeRings(), makeSpiral() ];
+    var colors = [0x36e0cf, 0x6f7bf7, 0xf4b14e, 0x36e0cf, 0x9a7cf2].map(function(c){ return new THREE.Color(c); });
+
+    /* ----- points ----- */
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(states[0]), 3));
+
+    function makeSprite(){
+      var c = document.createElement('canvas'); c.width = c.height = 64;
+      var g = c.getContext('2d');
+      var grd = g.createRadialGradient(32,32,0,32,32,32);
+      grd.addColorStop(0,   'rgba(255,255,255,1)');
+      grd.addColorStop(0.25,'rgba(255,255,255,0.85)');
+      grd.addColorStop(1,   'rgba(255,255,255,0)');
+      g.fillStyle = grd; g.fillRect(0,0,64,64);
+      var tex = new THREE.CanvasTexture(c);
+      return tex;
+    }
+
+    var material = new THREE.PointsMaterial({
+      size: 0.52,
+      map: makeSprite(),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      color: colors[0].clone(),
+      sizeAttenuation: true
+    });
+    var points = new THREE.Points(geo, material);
+    group.add(points);
+
+    /* ----- graticule globe (lat/long wireframe, hero only) ----- */
+    var gratGroup = new THREE.Group();
+    var gratMat = new THREE.LineBasicMaterial({ color:0x36e0cf, transparent:true, opacity:0.16 });
+    var Rg = R*1.12, seg = 64, i, j;
+    for(i=1;i<12;i++){
+      var lat = (i/12 - 0.5)*Math.PI;
+      var rr = Math.cos(lat)*Rg, yy = Math.sin(lat)*Rg;
+      var pts = [];
+      for(j=0;j<=seg;j++){ var aa = j/seg*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(aa)*rr, yy, Math.sin(aa)*rr)); }
+      gratGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gratMat));
+    }
+    for(i=0;i<18;i++){
+      var lon = i/18*Math.PI*2;
+      var pts2 = [];
+      for(j=0;j<=seg;j++){
+        var t = j/seg*Math.PI*2;
+        var lx = Math.cos(t)*Rg, ly = Math.sin(t)*Rg;
+        pts2.push(new THREE.Vector3(Math.cos(lon)*lx, ly, -Math.sin(lon)*lx));
+      }
+      gratGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts2), gratMat));
+    }
+    group.add(gratGroup);
+
+    /* ----- animation ----- */
+    var P = 0;
+    var posAttr = geo.attributes.position;
+    var cA = new THREE.Color(), cB = new THREE.Color();
+    var tmx = 0, tmy = 0, mx = 0, my = 0;
+    function smooth(t){ return t*t*(3 - 2*t); }
+
+    if(!reduced){
+      window.addEventListener('mousemove', function(e){
+        tmx = (e.clientX/window.innerWidth - 0.5);
+        tmy = (e.clientY/window.innerHeight - 0.5);
+      });
+    }
+
+    function resize(){
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', resize);
+
+    function animate(){
+      requestAnimationFrame(animate);
+
+      P += (targetP - P) * 0.06;
+
+      var f = P * (states.length - 1);
+      var idx = Math.floor(f);
+      if(idx >= states.length - 1) idx = states.length - 2;
+      if(idx < 0) idx = 0;
+      var t = smooth(f - idx);
+
+      var A = states[idx], B = states[idx+1], arr = posAttr.array, k;
+      for(k=0;k<arr.length;k++){ arr[k] = A[k] + (B[k] - A[k]) * t; }
+      posAttr.needsUpdate = true;
+
+      cA.copy(colors[idx]); cB.copy(colors[idx+1]); cA.lerp(cB, t);
+      material.color.copy(cA);
+
+      var gop = Math.max(0, 0.16 * (1 - P*2.6));
+      gratMat.opacity = gop;
+      gratGroup.visible = gop > 0.002;
+      var gs = Math.max(0.35, 1 - P*0.25);
+      gratGroup.scale.setScalar(gs);
+
+      if(!reduced){ group.rotation.y += 0.0009; }
+      var tiltTarget = (idx === 1 || idx === 2) ? 0.5 : 0.12;
+      group.rotation.x += (tiltTarget - group.rotation.x) * 0.03;
+
+      if(!reduced){
+        mx += (tmx - mx) * 0.05; my += (tmy - my) * 0.05;
+        camera.position.x = mx * 10;
+        camera.position.y = -my * 8;
+      }
+      camera.position.z = 52 - P*6;
+      camera.lookAt(0,0,0);
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+  } catch(err){
+    // If WebGL fails for any reason, the static background + content remain.
+    if(window.console) console.warn('3D background disabled:', err);
+  }
+})();
+</script>
+</body>
+</html>
